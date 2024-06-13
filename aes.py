@@ -3,6 +3,7 @@ from tkinter import filedialog, messagebox, Text, Scrollbar
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 import os
+import subprocess
 
 # Variables globales para almacenar el último archivo y modo de operación utilizados
 last_filename = ""
@@ -110,7 +111,8 @@ def write_file(filename, header, data, mode, prefix):
         last_filename = new_filename
         last_mode = mode
         print(f"Archivo guardado como: {new_filename}")
-        messagebox.showinfo("Archivo guardado", f"Archivo guardado como: {os.path.basename(new_filename)}")  
+        messagebox.showinfo("Archivo guardado", f"Archivo guardado como: {os.path.basename(new_filename)}")
+        subprocess.run(["start", new_filename], shell=True)
     except Exception as e:
         print(f"Error al guardar el archivo: {e}")
         messagebox.showwarning("Error al guardar", "Error al guardar el archivo.")
@@ -121,18 +123,27 @@ def main_menu():
     main_menu_window.title("Cifrador AES")
     main_menu_window.geometry("400x100")
 
+    # Contenedor central para los botones
+    button_frame = tk.Frame(main_menu_window)
+    button_frame.pack(pady=30)  # Centra el frame verticalmente y añade un poco de padding
+
+    # Botón para cifrar
     tk.Button(
-        main_menu_window,
+        button_frame,
         text="Cifrar",
         command=lambda: cipher_decipher_menu(main_menu_window, "Cifrar"),
-        width=10,
-    ).pack(pady=10)
+        bg="#e06666",
+        width=10
+    ).pack(side=tk.LEFT, padx=10)  # Añade espacio horizontal entre los botones
+
+    # Botón para descifrar
     tk.Button(
-        main_menu_window,
+        button_frame,
         text="Descifrar",
         command=lambda: cipher_decipher_menu(main_menu_window, "Descifrar"),
-        width=10,
-    ).pack()
+        bg="#93c47d",
+        width=10
+    ).pack(side=tk.LEFT, padx=10)  # Añade espacio horizontal entre los botones
 
     main_menu_window.mainloop()
 
@@ -182,19 +193,23 @@ def cipher_decipher_menu(parent_window, action):
     iv_entry.pack(fill="x", expand=True)
     update_iv_entry_state(iv_entry, mode_var)  # Asegúrate de llamar esta función para configurar el estado inicial correctamente
 
+     # Contenedor central para los botones
+    button_frame = tk.Frame(frame)
+    button_frame.pack(pady=10)  # Centra el frame verticalmente y añade un poco de padding
+
     # Botones de acción
     if action == "Cifrar":
-        button_color = "red"
+        button_color = "#e06666"
         command = lambda: encrypt_file(
             filename_text.get("1.0", "end-1c"), key_entry.get(), mode_var.get(), iv_entry.get()
         )
     else:  # Descifrar
-        button_color = "green"
+        button_color = "#93c47d"
         command = lambda: decrypt_file(
             filename_text.get("1.0", "end-1c"), key_entry.get(), mode_var.get(), iv_entry.get()
         )
-    tk.Button(frame, text=action, command=command, bg=button_color).pack(pady=5)
-    tk.Button(frame, text="Volver", command=lambda: close_window(action_window, parent_window)).pack(pady=5)
+    tk.Button(button_frame, text="Volver", command=lambda: close_window(action_window, parent_window)).pack(side=tk.LEFT, padx=10, pady=10)
+    tk.Button(button_frame, text=action, command=command, bg=button_color).pack(side=tk.LEFT, padx=10, pady=10)
 
 def update_iv_entry_state(iv_entry, mode_var):
     if mode_var.get() == "ECB":
@@ -206,12 +221,7 @@ def select_file(text_widget):
     filename = filedialog.askopenfilename()
     text_widget.delete("1.0", tk.END)
     text_widget.insert("1.0", filename)
-
-# def select_file(filename_entry):
-#     filename = filedialog.askopenfilename()
-#     filename_entry.delete(0, tk.END)
-#     filename_entry.insert(0, filename)
-
+    
 
 def close_window(child_window, parent_window):
     child_window.destroy()
