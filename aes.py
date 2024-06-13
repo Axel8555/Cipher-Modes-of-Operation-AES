@@ -1,9 +1,12 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, Text, Scrollbar
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 import os
 
+# Variables globales para almacenar el último archivo y modo de operación utilizados
+last_filename = ""
+last_mode = "ECB"
 
 def aes_encrypt(plaintext, key, mode, c0=None):
     try:
@@ -97,12 +100,15 @@ def read_file(filename):
 
 
 def write_file(filename, header, data, mode, prefix):
+    global last_filename, last_mode
     filename_base = filename.rsplit(".", 1)[-2]
     extension = filename.rsplit(".", 1)[-1]
     new_filename = f"{filename_base}_{prefix}{mode}.{extension}"
     try:
         with open(new_filename, "wb") as f:
             f.write(header + data)
+        last_filename = new_filename
+        last_mode = mode
         print(f"Archivo guardado como: {new_filename}")
         messagebox.showinfo("Archivo guardado", f"Archivo guardado como: {os.path.basename(new_filename)}")  
     except Exception as e:
@@ -135,68 +141,76 @@ def cipher_decipher_menu(parent_window, action):
     parent_window.withdraw()
     action_window = tk.Toplevel()
     action_window.title(action)
-    action_window.geometry("400x350")
+    action_window.geometry("400x400")
 
     frame = tk.Frame(action_window)
     frame.pack(padx=10, pady=10)
 
+    # Ruta del archivo
     tk.Label(frame, text="Ruta del archivo:").pack(anchor="w")
-    filename_entry = tk.Entry(frame, width=40)
-    filename_entry.pack(fill="x", expand=True)
-    tk.Button(
-        frame, text="Seleccionar", command=lambda: select_file(filename_entry)
-    ).pack(anchor="e")
+    filename_text = Text(frame, height=1, width=40)
+    filename_text.pack(fill="x", expand=True)
+    filename_text.insert(tk.END, last_filename)
+    scrollbar = Scrollbar(frame, orient="horizontal", command=filename_text.xview)
+    filename_text.configure(wrap="none", xscrollcommand=scrollbar.set)
+    scrollbar.pack(fill="x")
+    tk.Button(frame, text="Seleccionar", command=lambda: select_file(filename_text)).pack(anchor="e")
 
+    # Clave
     tk.Label(frame, text="Clave:").pack(anchor="w")
     key_entry = tk.Entry(frame, show="*", width=40)
     key_entry.pack(fill="x", expand=True)
 
+    # Modo de operación
     tk.Label(frame, text="Modo de operación:").pack(anchor="w")
     modes = {"ECB": "ECB", "CBC": "CBC", "CFB": "CFB", "OFB": "OFB"}
-    mode_var = tk.StringVar(value=list(modes.values())[-1])
-
-    tk.Label(frame, text="Vector de Inicialización:").pack(anchor="w")
-    iv_entry = tk.Entry(frame, show="*", width=40)
-    iv_entry.pack(fill="x", expand=True)
-
-    def update_iv_entry_state():
-        if mode_var.get() == "ECB":
-            iv_entry.config(state="disabled")
-        else:
-            iv_entry.config(state="normal")
-
+    mode_var = tk.StringVar(value=last_mode if last_mode in modes.values() else list(modes.values())[-1])
+    modes_frame = tk.Frame(frame)
+    modes_frame.pack(fill='x', expand=True)
     for mode, value in modes.items():
         tk.Radiobutton(
-            frame,
+            modes_frame,
             text=mode,
             variable=mode_var,
             value=value,
-            command=update_iv_entry_state,
-        ).pack()
+            command=lambda: update_iv_entry_state(iv_entry, mode_var)
+        ).pack() #side="left"
 
+    # Vector de Inicialización
+    tk.Label(frame, text="Vector de Inicialización:").pack(anchor="w")
+    iv_entry = tk.Entry(frame, show="*", width=40)
+    iv_entry.pack(fill="x", expand=True)
+    update_iv_entry_state(iv_entry, mode_var)  # Asegúrate de llamar esta función para configurar el estado inicial correctamente
+
+    # Botones de acción
     if action == "Cifrar":
         button_color = "red"
         command = lambda: encrypt_file(
-            filename_entry.get(), key_entry.get(), mode_var.get(), iv_entry.get()
+            filename_text.get("1.0", "end-1c"), key_entry.get(), mode_var.get(), iv_entry.get()
         )
     else:  # Descifrar
         button_color = "green"
         command = lambda: decrypt_file(
-            filename_entry.get(), key_entry.get(), mode_var.get(), iv_entry.get()
+            filename_text.get("1.0", "end-1c"), key_entry.get(), mode_var.get(), iv_entry.get()
         )
-
     tk.Button(frame, text=action, command=command, bg=button_color).pack(pady=5)
-    tk.Button(
-        frame, text="Volver", command=lambda: close_window(action_window, parent_window)
-    ).pack(pady=5)
+    tk.Button(frame, text="Volver", command=lambda: close_window(action_window, parent_window)).pack(pady=5)
 
-    update_iv_entry_state()
+def update_iv_entry_state(iv_entry, mode_var):
+    if mode_var.get() == "ECB":
+        iv_entry.config(state="disabled")
+    else:
+        iv_entry.config(state="normal")
 
-
-def select_file(filename_entry):
+def select_file(text_widget):
     filename = filedialog.askopenfilename()
-    filename_entry.delete(0, tk.END)
-    filename_entry.insert(0, filename)
+    text_widget.delete("1.0", tk.END)
+    text_widget.insert("1.0", filename)
+
+# def select_file(filename_entry):
+#     filename = filedialog.askopenfilename()
+#     filename_entry.delete(0, tk.END)
+#     filename_entry.insert(0, filename)
 
 
 def close_window(child_window, parent_window):
