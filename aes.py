@@ -38,9 +38,7 @@ def aes_decrypt(ciphertext, key, mode, c0=None):
         return plaintext
     except ValueError:
         print("Decipher error: Invalid padding.")
-        messagebox.showwarning(
-            "Decipher error", "The ciphertext has invalid padding."
-        )
+        messagebox.showwarning("Decipher error", "The ciphertext has invalid padding.")
         return None
     except Exception as e:
         print(f"Decipher error: {e}")
@@ -115,7 +113,8 @@ def write_file(filename, header, data, mode, prefix):
         last_mode = mode
         print(f"File saved as: {new_filename}")
         messagebox.showinfo(
-            "File saved", f"File saved as: {os.path.basename(new_filename)}",
+            "File saved",
+            f"File saved as: {os.path.basename(new_filename)}",
         )
         subprocess.run(["start", new_filename], shell=True)
     except Exception as e:
@@ -130,9 +129,7 @@ def main_menu():
 
     # Central container for buttons
     button_frame = tk.Frame(main_menu_window)
-    button_frame.pack(
-        pady=30
-    )  # Center the frame vertically and add some padding
+    button_frame.pack(pady=30)  # Center the frame vertically and add some padding
 
     # Encrypt button
     tk.Button(
@@ -176,12 +173,12 @@ def cipher_decipher_menu(parent_window, action):
     scrollbar = Scrollbar(frame, orient="horizontal", command=filename_text.xview)
     filename_text.configure(wrap="none", xscrollcommand=scrollbar.set)
     scrollbar.pack(fill="x")
-    tk.Button(
-        frame, text="Select", command=lambda: select_file(filename_text)
-    ).pack(anchor="e")
+    tk.Button(frame, text="Select", command=lambda: select_file(filename_text)).pack(
+        anchor="e"
+    )
 
     # Key
-    tk.Label(frame, text="Key:").pack(anchor="w")
+    tk.Label(frame, text="Key (K):").pack(anchor="w")
     key_entry = tk.Entry(frame, show="*", width=40)
     key_entry.pack(fill="x", expand=True)
 
@@ -203,7 +200,7 @@ def cipher_decipher_menu(parent_window, action):
         ).pack()  # side="left"
 
     # Initialization Vector
-    tk.Label(frame, text="Initialization Vector:").pack(anchor="w")
+    tk.Label(frame, text="Initialization Vector (C0):").pack(anchor="w")
     iv_entry = tk.Entry(frame, show="*", width=40)
     iv_entry.pack(fill="x", expand=True)
     update_iv_entry_state(
@@ -212,9 +209,7 @@ def cipher_decipher_menu(parent_window, action):
 
     # Central container for buttons
     button_frame = tk.Frame(frame)
-    button_frame.pack(
-        pady=10
-    )  # Center the frame vertically and add some padding
+    button_frame.pack(pady=10)  # Center the frame vertically and add some padding
 
     # Action buttons
     if action == "Cipher":
