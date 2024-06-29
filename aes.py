@@ -92,17 +92,29 @@ def verify_parameters(file_path, key, mode, c0):
     if mode not in ["CBC", "CFB", "OFB", "ECB"]:
         messagebox.showwarning("Warning", "Please select a valid mode.")
         return None, None, None
-    key_encoded = key.encode("utf-8")
-    if len(key_encoded) != 16:
-        messagebox.showwarning("Warning", "The key must be 16 bytes long.")
+    try:
+        key = bytes.fromhex(key)
+        if len(key) != 16:
+            messagebox.showwarning("Warning", "The key must be 16 bytes long.")
+            return None, None, None
+    except ValueError as e:
+        messagebox.showwarning("Warning", f"Invalid key hex string: {e}")
         return None, None, None
-    c0_encoded = c0.encode("utf-8")
-    if mode != "ECB" and len(c0_encoded) != 16:
-        messagebox.showwarning(
-            "Warning", "The initialization vector c0 must be 16 bytes long."
-        )
+    try:
+        if mode != "ECB":  # Only necessary if using modes that require an IV
+            c0 = bytes.fromhex(c0)
+            if len(c0) != 16:
+                messagebox.showwarning(
+                    "Warning", "The initialization vector c0 must be 16 bytes long."
+                )
+                return None, None, None
+        else:
+            c0 = None
+    except ValueError as e:
+        messagebox.showwarning("Warning", f"Invalid IV hex string: {e}")
         return None, None, None
-    return key_encoded, c0_encoded, mode
+
+    return key, c0, mode
 
 
 def extract_content(content, header_size, footer_size):
@@ -190,7 +202,7 @@ def cipher_decipher_menu(parent_window, action):
     parent_window.withdraw()
     action_window = tk.Toplevel()
     action_window.title(f"{action} File")
-    action_window.geometry("400x400")
+    action_window.geometry("400x450")
 
     frame = tk.Frame(action_window)
     frame.pack(padx=10, pady=10)
@@ -208,9 +220,12 @@ def cipher_decipher_menu(parent_window, action):
     ).pack(anchor="e")
 
     # Key
-    tk.Label(frame, text="Key (K):").pack(anchor="w")
-    key_entry = tk.Entry(frame, show="*", width=40)
+    tk.Label(frame, text="Key (K) [32 hex characters]:").pack(anchor="w")
+    key_entry = tk.Entry(frame, width=40)
     key_entry.pack(fill="x", expand=True)
+    tk.Button(
+        frame, text="Load from file", command=lambda: select_file_and_load_content(key_entry,[("Hex files", "*.hex"), ("All files", "*.*")]),
+    ).pack(anchor="e")
 
     # Mode of operation
     tk.Label(frame, text="Mode of operation:").pack(anchor="w")
@@ -226,16 +241,22 @@ def cipher_decipher_menu(parent_window, action):
             text=mode,
             variable=mode_var,
             value=value,
-            command=lambda: update_iv_entry_state(iv_entry, mode_var),
+            command=lambda: update_iv_entry_state(iv_entry, load_iv_button, mode_var),
         ).pack()  # side="left"
 
     # Initialization Vector
-    tk.Label(frame, text="Initialization Vector (C0):").pack(anchor="w")
-    iv_entry = tk.Entry(frame, show="*", width=40)
+    tk.Label(frame, text="Initialization Vector (C0 or IV) [32 hex characters]:").pack(
+        anchor="w"
+    )
+    iv_entry = tk.Entry(frame, width=40)
     iv_entry.pack(fill="x", expand=True)
+    load_iv_button = tk.Button(
+        frame, text="Load from file", command=lambda: select_file_and_load_content(iv_entry,[("Hex files", "*.hex"), ("All files", "*.*")]),
+    )
+    load_iv_button.pack(anchor="e")
     update_iv_entry_state(
-        iv_entry, mode_var
-    )  # Make sure to call this function to set the initial state correctly
+        iv_entry, load_iv_button, mode_var
+    )
 
     # Action buttons
     button_frame = tk.Frame(frame)
@@ -267,17 +288,31 @@ def cipher_decipher_menu(parent_window, action):
     )
 
 
-def update_iv_entry_state(iv_entry, mode_var):
+def update_iv_entry_state(iv_entry, load_iv_button, mode_var):
     if mode_var.get() == "ECB":
         iv_entry.config(state="disabled")
+        load_iv_button.config(state="disabled")
     else:
         iv_entry.config(state="normal")
+        load_iv_button.config(state="normal")
 
 
-def select_file(text_widget):
-    file_path = filedialog.askopenfilename()
+def select_file(text_widget, filetypes=[("All files", "*.*")]):
+    file_path = filedialog.askopenfilename(filetypes=filetypes)
     text_widget.delete("1.0", tk.END)
     text_widget.insert("1.0", file_path)
+
+
+def select_file_and_load_content(entry_widget, filetypes=[("All files", "*.*")]):
+    file_path = filedialog.askopenfilename(filetypes=filetypes)
+    if file_path:
+        data = read_file(file_path)
+        if data is not None:
+            string = data.decode("utf-8")
+            entry_widget.delete(0, tk.END)
+            entry_widget.insert(0, string)
+        else:
+            messagebox.showerror("Error", "Failed to load data from file.")
 
 
 def close_window(child_window, parent_window):
