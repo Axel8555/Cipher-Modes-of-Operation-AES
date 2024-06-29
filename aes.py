@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Global variables to store the last used file and mode of operation
-last_filename = ""
+last_file_path = ""
 last_mode = "ECB"
 
 
@@ -46,31 +46,47 @@ def aes_decrypt(ciphertext, key, mode, c0=None):
         return None
 
 
-def encrypt_file(filename, key, mode, c0):
-    key, c0, mode = verify_parameters(filename, key, mode, c0)
+def encrypt_file(file_path, key, mode, c0):
+    global last_mode, last_file_path
+    key, c0, mode = verify_parameters(file_path, key, mode, c0)
     if key is None:
         return
-    header, plaintext = read_file(filename)
+    content = read_file(file_path)
+    extension = file_path.rsplit(".", 1)[-1]
+    header, plaintext, _ = (
+        extract_content(content, 54, 0)
+        if extension == "bmp"
+        else extract_content(content, 0, 0)
+    )
     ciphertext = aes_encrypt(plaintext, key, getattr(AES, f"MODE_{mode}"), c0)
-    write_file(filename, header, ciphertext, mode, "e")
+    last_file_path = write_file(file_path, header + ciphertext, f"e{mode}")
+    last_mode = mode
 
 
-def decrypt_file(filename, key, mode, c0):
-    key, c0, mode = verify_parameters(filename, key, mode, c0)
+def decrypt_file(file_path, key, mode, c0):
+    global last_mode, last_file_path
+    key, c0, mode = verify_parameters(file_path, key, mode, c0)
     if key is None:
         return
-    header, ciphertext = read_file(filename)
+    content = read_file(file_path)
+    extension = file_path.rsplit(".", 1)[-1]
+    header, ciphertext, _ = (
+        extract_content(content, 54, 0)
+        if extension == "bmp"
+        else extract_content(content, 0, 0)
+    )
     plaintext = aes_decrypt(ciphertext, key, getattr(AES, f"MODE_{mode}"), c0)
-    write_file(filename, header, plaintext, mode, "d")
+    last_file_path = write_file(file_path, header + plaintext, f"d{mode}")
+    last_mode = mode
 
 
-def verify_parameters(filename, key, mode, c0):
+def verify_parameters(file_path, key, mode, c0):
     root = tk.Tk()
     root.withdraw()  # Hide the main Tkinter window
-    if not filename:
+    if not file_path:
         messagebox.showwarning("Warning", "Please select a file.")
         return None, None, None
-    if not os.path.exists(filename):
+    if not os.path.exists(file_path):
         messagebox.showwarning("Warning", "The file does not exist.")
         return None, None, None
     if mode not in ["CBC", "CFB", "OFB", "ECB"]:
@@ -89,37 +105,51 @@ def verify_parameters(filename, key, mode, c0):
     return key_encoded, c0_encoded, mode
 
 
-def read_file(filename):
+def extract_content(content, header_size, footer_size):
+    if content is not None:
+        header = content[:header_size] if header_size > 0 else b""
+        footer = content[-footer_size:] if footer_size > 0 else b""
+        data = (
+            content[header_size:-footer_size]
+            if footer_size > 0
+            else content[header_size:]
+        )
+        return header, data, footer
+    else:
+        return None, None, None
+
+
+def read_file(file_path):
     try:
-        with open(filename, "rb") as f:
-            header = f.read(54) if filename.endswith(".bmp") else b""
-            data = f.read()
-        return header, data
+        with open(file_path, "rb") as f:
+            content = f.read()
+        return content
     except Exception as e:
         print(f"Error reading the file: {e}")
-        messagebox.showwarning("Read error", "Error reading the file.")
-        return None, None
+        messagebox.showwarning("Read error", f"Error reading the file. {e}")
+        return None
 
 
-def write_file(filename, header, data, mode, prefix):
-    global last_filename, last_mode
-    filename_base = filename.rsplit(".", 1)[-2]
-    extension = filename.rsplit(".", 1)[-1]
-    new_filename = f"{filename_base}_{prefix}{mode}.{extension}"
+def write_file(file_path, data, sufix=None):
+    file_path_base = file_path.rsplit(".", 1)[-2]
+    extension = file_path.rsplit(".", 1)[-1]
+    new_file_path = (
+        f"{file_path_base}{('_' + sufix) if sufix is not None else ''}.{extension}"
+    )
     try:
-        with open(new_filename, "wb") as f:
-            f.write(header + data)
-        last_filename = new_filename
-        last_mode = mode
-        print(f"File saved as: {new_filename}")
+        with open(new_file_path, "wb") as f:
+            f.write(data)
+        print(f"File saved as: {new_file_path}")
         messagebox.showinfo(
             "File saved",
-            f"File saved as: {os.path.basename(new_filename)}",
+            f"File saved as: {os.path.basename(new_file_path)}",
         )
-        subprocess.run(["start", new_filename], shell=True)
+        subprocess.run(["start", new_file_path], shell=True)
+        return new_file_path
     except Exception as e:
         print(f"Error saving the file: {e}")
-        messagebox.showwarning("Save error", "Error saving the file.")
+        messagebox.showwarning("Save error", f"Error saving the file. {e}")
+        return None
 
 
 def main_menu():
@@ -159,7 +189,7 @@ def main_menu():
 def cipher_decipher_menu(parent_window, action):
     parent_window.withdraw()
     action_window = tk.Toplevel()
-    action_window.title(action)
+    action_window.title(f"{action} File")
     action_window.geometry("400x400")
 
     frame = tk.Frame(action_window)
@@ -167,15 +197,15 @@ def cipher_decipher_menu(parent_window, action):
 
     # File path
     tk.Label(frame, text="File path:").pack(anchor="w")
-    filename_text = Text(frame, height=1, width=40)
-    filename_text.pack(fill="x", expand=True)
-    filename_text.insert(tk.END, last_filename)
-    scrollbar = Scrollbar(frame, orient="horizontal", command=filename_text.xview)
-    filename_text.configure(wrap="none", xscrollcommand=scrollbar.set)
+    file_path_text = Text(frame, height=1, width=40)
+    file_path_text.pack(fill="x", expand=True)
+    file_path_text.insert(tk.END, last_file_path)
+    scrollbar = Scrollbar(frame, orient="horizontal", command=file_path_text.xview)
+    file_path_text.configure(wrap="none", xscrollcommand=scrollbar.set)
     scrollbar.pack(fill="x")
-    tk.Button(frame, text="Select", command=lambda: select_file(filename_text)).pack(
-        anchor="e"
-    )
+    tk.Button(
+        frame, text="Select File", command=lambda: select_file(file_path_text)
+    ).pack(anchor="e")
 
     # Key
     tk.Label(frame, text="Key (K):").pack(anchor="w")
@@ -207,15 +237,14 @@ def cipher_decipher_menu(parent_window, action):
         iv_entry, mode_var
     )  # Make sure to call this function to set the initial state correctly
 
-    # Central container for buttons
-    button_frame = tk.Frame(frame)
-    button_frame.pack(pady=10)  # Center the frame vertically and add some padding
-
     # Action buttons
+    button_frame = tk.Frame(frame)
+    button_frame.pack(pady=10)
+
     if action == "Cipher":
         button_color = "#e06666"
         command = lambda: encrypt_file(
-            filename_text.get("1.0", "end-1c"),
+            file_path_text.get("1.0", "end-1c"),
             key_entry.get(),
             mode_var.get(),
             iv_entry.get(),
@@ -223,7 +252,7 @@ def cipher_decipher_menu(parent_window, action):
     else:  # Decrypt
         button_color = "#93c47d"
         command = lambda: decrypt_file(
-            filename_text.get("1.0", "end-1c"),
+            file_path_text.get("1.0", "end-1c"),
             key_entry.get(),
             mode_var.get(),
             iv_entry.get(),
@@ -246,9 +275,9 @@ def update_iv_entry_state(iv_entry, mode_var):
 
 
 def select_file(text_widget):
-    filename = filedialog.askopenfilename()
+    file_path = filedialog.askopenfilename()
     text_widget.delete("1.0", tk.END)
-    text_widget.insert("1.0", filename)
+    text_widget.insert("1.0", file_path)
 
 
 def close_window(child_window, parent_window):
