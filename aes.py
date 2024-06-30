@@ -2,8 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, Text, Scrollbar
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
-import os
-import subprocess
+import os, webbrowser
 
 # Global variables to store the last used file and mode of operation
 last_file_path = ""
@@ -131,6 +130,18 @@ def extract_content(content, header_size, footer_size):
         return None, None, None
 
 
+def open_file(file_path):
+    try:
+        # Tries to open the file with the default application
+        if os.name == "nt":  # Windows
+            os.startfile(file_path)
+        else:
+            # Unix based systems
+            webbrowser.open(file_path)
+    except Exception as e:
+        print(f"Error opening the file: {e}")
+
+
 def read_file(file_path):
     try:
         with open(file_path, "rb") as f:
@@ -142,12 +153,10 @@ def read_file(file_path):
         return None
 
 
-def write_file(file_path, data, sufix=None):
+def write_file(file_path, data, suffix=None, open_new_file=True):
     file_path_base = file_path.rsplit(".", 1)[-2]
     extension = file_path.rsplit(".", 1)[-1]
-    new_file_path = (
-        f"{file_path_base}{('_' + sufix) if sufix is not None else ''}.{extension}"
-    )
+    new_file_path = f"{file_path_base}{('_' + suffix) if suffix is not None and suffix != '' else ''}.{extension}"
     try:
         with open(new_file_path, "wb") as f:
             f.write(data)
@@ -156,7 +165,8 @@ def write_file(file_path, data, sufix=None):
             "File saved",
             f"File saved as: {os.path.basename(new_file_path)}",
         )
-        subprocess.run(["start", new_file_path], shell=True)
+        if open_new_file:
+            open_file(new_file_path)
         return new_file_path
     except Exception as e:
         print(f"Error saving the file: {e}")
@@ -201,7 +211,7 @@ def main_menu():
 def cipher_decipher_menu(parent_window, action):
     parent_window.withdraw()
     action_window = tk.Toplevel()
-    action_window.title(f"{action} File")
+    action_window.title(f"{action} file")
     action_window.geometry("400x450")
 
     frame = tk.Frame(action_window)
@@ -224,7 +234,11 @@ def cipher_decipher_menu(parent_window, action):
     key_entry = tk.Entry(frame, width=40)
     key_entry.pack(fill="x", expand=True)
     tk.Button(
-        frame, text="Load from file", command=lambda: select_file_and_load_content(key_entry,[("Hex files", "*.hex"), ("All files", "*.*")]),
+        frame,
+        text="Load from file",
+        command=lambda: select_file_and_load_content(
+            key_entry, [("Hex files", "*.hex"), ("All files", "*.*")]
+        ),
     ).pack(anchor="e")
 
     # Mode of operation
@@ -251,12 +265,14 @@ def cipher_decipher_menu(parent_window, action):
     iv_entry = tk.Entry(frame, width=40)
     iv_entry.pack(fill="x", expand=True)
     load_iv_button = tk.Button(
-        frame, text="Load from file", command=lambda: select_file_and_load_content(iv_entry,[("Hex files", "*.hex"), ("All files", "*.*")]),
+        frame,
+        text="Load from file",
+        command=lambda: select_file_and_load_content(
+            iv_entry, [("Hex files", "*.hex"), ("All files", "*.*")]
+        ),
     )
     load_iv_button.pack(anchor="e")
-    update_iv_entry_state(
-        iv_entry, load_iv_button, mode_var
-    )
+    update_iv_entry_state(iv_entry, load_iv_button, mode_var)
 
     # Action buttons
     button_frame = tk.Frame(frame)
