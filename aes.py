@@ -1,7 +1,8 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, Text, Scrollbar
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import pad, unpad
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.backends import default_backend
 import os, webbrowser
 
 # Global variables to store the last used file and mode of operation
@@ -11,13 +12,18 @@ last_mode = "ECB"
 
 def aes_encrypt(plaintext, key, mode, c0=None):
     try:
-        if mode == AES.MODE_ECB:
-            cipher = AES.new(key, mode)
-            padded_plaintext = pad(plaintext, AES.block_size)
-            ciphertext = cipher.encrypt(padded_plaintext)
+        backend = default_backend()
+        if mode == "ECB":
+            cipher = Cipher(algorithms.AES(key), modes.ECB(), backend=backend)
         else:
-            cipher = AES.new(key, mode, c0)
-            ciphertext = cipher.encrypt(plaintext)
+            cipher = Cipher(
+                algorithms.AES(key), getattr(modes, mode)(c0), backend=backend
+            )
+
+        encryptor = cipher.encryptor()
+        padder = padding.PKCS7(algorithms.AES.block_size).padder()
+        padded_plaintext = padder.update(plaintext) + padder.finalize()
+        ciphertext = encryptor.update(padded_plaintext) + encryptor.finalize()
         return ciphertext
     except Exception as e:
         print(f"Cipher error: {e}")
@@ -26,19 +32,28 @@ def aes_encrypt(plaintext, key, mode, c0=None):
 
 
 def aes_decrypt(ciphertext, key, mode, c0=None):
+    backend = default_backend()
     try:
-        if mode == AES.MODE_ECB:
-            cipher = AES.new(key, mode)
-            padded_plaintext = cipher.decrypt(ciphertext)
-            plaintext = unpad(padded_plaintext, AES.block_size)
+        if mode == "ECB":
+            cipher = Cipher(algorithms.AES(key), modes.ECB(), backend=backend)
         else:
-            cipher = AES.new(key, mode, c0)
-            plaintext = cipher.decrypt(ciphertext)
-        return plaintext
-    except ValueError:
-        print("Decipher error: Invalid padding.")
-        messagebox.showwarning("Decipher error", "The ciphertext has invalid padding.")
-        return None
+            cipher = Cipher(
+                algorithms.AES(key), getattr(modes, mode)(c0), backend=backend
+            )
+
+        decryptor = cipher.decryptor()
+        plaintext_padded = decryptor.update(ciphertext) + decryptor.finalize()
+        try:
+            unpadder = padding.PKCS7(algorithms.AES.block_size).unpadder()
+            plaintext = unpadder.update(plaintext_padded) + unpadder.finalize()
+            return plaintext
+        except ValueError:
+            # Si hay un error de padding, devuelve el texto cifrado que no se pudo desempaquetar correctamente
+            print(
+                "Warning: Padding error detected in decryption. Data may be corrupted or incomplete."
+            )
+            return plaintext_padded  # Retornar los datos sin desempaquetar puede ser inútil si están muy corruptos.
+
     except Exception as e:
         print(f"Decipher error: {e}")
         messagebox.showwarning("Decipher error", "Error decipherying the file.")
@@ -57,7 +72,7 @@ def encrypt_file(file_path, key, mode, c0):
         if extension == "bmp"
         else extract_content(content, 0, 0)
     )
-    ciphertext = aes_encrypt(plaintext, key, getattr(AES, f"MODE_{mode}"), c0)
+    ciphertext = aes_encrypt(plaintext, key, mode, c0)
     last_file_path = write_file(file_path, header + ciphertext, f"e{mode}")
     last_mode = mode
 
@@ -74,7 +89,7 @@ def decrypt_file(file_path, key, mode, c0):
         if extension == "bmp"
         else extract_content(content, 0, 0)
     )
-    plaintext = aes_decrypt(ciphertext, key, getattr(AES, f"MODE_{mode}"), c0)
+    plaintext = aes_decrypt(ciphertext, key, mode, c0)
     last_file_path = write_file(file_path, header + plaintext, f"d{mode}")
     last_mode = mode
 
